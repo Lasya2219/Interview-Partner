@@ -11,14 +11,20 @@ function InterviewScreen({
 }) {
 
   const [currentQuestion, setCurrentQuestion] = useState(question);
+  const [isFollowup, setIsFollowup] = useState(false);
   const [answer, setAnswer] = useState("");
   const [report, setReport] = useState("");
   const [timeLeft, setTimeLeft] = useState(Number(duration) * 60);
+  const [isRecording, setIsRecording] = useState(false);
   const hasSpoken = useRef(false);
+  const recognitionRef = useRef(null);
 
   const handleEndInterview = async () => {
 
       try {
+        if (recognitionRef.current) {
+          recognitionRef.current.stop();
+        }
 
         const response = await api.post(
         "/end-interview",
@@ -44,13 +50,21 @@ function InterviewScreen({
           return;
         }
 
+        const SpeechRecognition =
+            window.SpeechRecognition || window.webkitSpeechRecognition;
+
         const recognition =
-            new window.webkitSpeechRecognition();
+            new SpeechRecognition();
+
+        recognitionRef.current = recognition;
 
         recognition.lang = "en-US";
 
-        recognition.onerror = () => {
-          alert("Unable to access microphone.");
+        recognition.onerror = (event) => {
+          if (event.error !== "aborted") {
+            alert("Unable to access microphone.");
+          }
+          setIsRecording(false);
         };
 
         recognition.onresult = (event) => {
@@ -61,7 +75,20 @@ function InterviewScreen({
 
         };
 
+        recognition.onend = () => {
+          setIsRecording(false);
+          recognitionRef.current = null;
+        };
+
         recognition.start();
+        setIsRecording(true);
+    };
+
+    const stopListening = () => {
+        if (recognitionRef.current) {
+          recognitionRef.current.stop();
+        }
+        setIsRecording(false);
     };
 
     const speakText = (text) => {
@@ -107,6 +134,14 @@ function InterviewScreen({
 
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, []);
+
   const handleSubmit = async () => {
 
     if (!answer.trim()) {
@@ -126,8 +161,10 @@ function InterviewScreen({
           }
         );
 
-        setCurrentQuestion(response.data.followup);
-        speakText(response.data.followup);
+        const nextQuestion = response.data.question || response.data.followup;
+        setCurrentQuestion(nextQuestion);
+        setIsFollowup(Boolean(response.data.is_followup));
+        speakText(nextQuestion);
         setAnswer("");
     } catch (error) {
         alert("Error submitting answer. Please try again.");
@@ -153,7 +190,7 @@ function InterviewScreen({
         Time Left: {timeLeft}s
       </h3>
 
-      <h2>Question</h2>
+      <h2>{isFollowup ? "Follow-up Question" : "Question"}</h2>
 
       <p>{currentQuestion}</p>
 
@@ -162,15 +199,16 @@ function InterviewScreen({
         onChange={(e) => setAnswer(e.target.value)}
       />
 
-      <button onClick={startListening}>
-        🎤 Speak Answer
+      <button
+        className={isRecording ? "recording-button" : ""}
+        onClick={isRecording ? stopListening : startListening}
+      >
+        {isRecording ? "Stop Recording" : "🎤 Speak Answer"}
       </button>
 
       <br />
 
-      <button onClick={startListening}>
-        🎤 Speak Answer
-      </button>
+      
 
       <br />
 

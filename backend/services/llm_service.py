@@ -42,10 +42,47 @@ def generate_question(role, resume_text, company):
         print(f"Error generating interview question: {e}")
         return "Sorry, I'm having trouble generating a question right now."
 
+def generate_next_question(role, resume_text, company, history):
+
+    formatted_history = "\n".join([f"Q: {item.get('question', '')}\nA: {item.get('answer', '')}" for item in history])
+
+    prompt = f"""
+    You are an experienced technical interviewer conducting a live, multi-topic interview.
+
+    Candidate Role:
+    {role}
+
+    Target Company:
+    {company}
+
+    Resume:
+    {resume_text}
+
+    Questions & Answers asked so far:
+    {formatted_history}
+
+    Instructions:
+    - Ask ONLY ONE brand new interview question.
+    - Transition to a COMPLETELY DIFFERENT topic or area from the previous questions (e.g., if previous questions focused on a specific project, switch to core technical fundamentals, system architecture, debugging, or behavioral/collaboration).
+    - Do NOT ask a follow-up to the previous question.
+    - Do NOT repeat or overlap with any topic or question already covered.
+    - The question should be concise (1-2 sentences maximum).
+    - Do NOT explain your reasoning.
+    - Do NOT use headings or bullet points.
+
+    Return only the interview question.
+    """
+    try:
+        response = llm.invoke(prompt)
+        return response.content
+    except Exception as e:
+        print(f"Error generating next interview question: {e}")
+        return "Sorry, I'm having trouble generating a question right now."
+
 def generate_followup(question, answer, company):
 
     prompt = f"""
-    You are an experienced interviewer.
+    You are an experienced interviewer conducting a conversational interview.
 
     Target Company:
     {company}
@@ -57,9 +94,10 @@ def generate_followup(question, answer, company):
     {answer}
 
     Instructions:
-    - Ask ONLY ONE follow-up question.
+    - Ask ONLY ONE follow-up question directly related to what the candidate just answered.
     - Keep it under 2 sentences.
-    - Base it on the candidate's previous answer.
+    - Probe for a practical detail, edge case, or specific trade-off from their answer.
+    - Do NOT ask them to recite textbook essays or lengthy definitions.
     - If appropriate, relate it to expectations for {company}.
     - Do not provide feedback.
     - Do not answer the previous question.
@@ -78,7 +116,7 @@ def generate_followup(question, answer, company):
 def evaluate_answer(question, answer):
 
     prompt = f"""
-    You are an experienced technical interviewer.
+    You are an experienced technical interviewer evaluating a spoken interview response.
 
     Interview Question:
     {question}
@@ -86,20 +124,19 @@ def evaluate_answer(question, answer):
     Candidate Answer:
     {answer}
 
-    Evaluate the candidate's answer based on:
-
-    * Technical correctness
-    * Completeness
-    * Clarity of explanation
-    * Confidence demonstrated
+    Instructions:
+    - In a real verbal interview, concise and direct answers (2-3 sentences) are strong communication.
+    - Do NOT penalize brevity if the core concept or logic is correct.
+    - Do NOT complain that the answer 'should have been in more detail'.
+    - Evaluate based on technical correctness, clarity, and practical understanding.
 
     Provide:
 
     1. Technical Score (/10)
     2. Brief Feedback (2-3 sentences)
-    3. One suggestion for improvement
+    3. One practical suggestion for improvement
 
-    Keep the evaluation concise and professional.
+    Keep the evaluation realistic and professional.
     """
 
     try:
@@ -110,34 +147,38 @@ def evaluate_answer(question, answer):
         return "Sorry, I'm having trouble evaluating your answers right now."  
 
 
-def generate_report(history):
+def generate_report(history, role="", company=""):
 
     prompt = f"""
-    You are an interview evaluator.
+    You are a realistic, professional interview evaluator assessing a spoken/conversational interview.
+
+    Role:
+    {role}
+
+    Target Company:
+    {company}
 
     Interview History:
     {history}
 
-    Evaluate the candidate based on their interview responses, not their resume.
+    Important Evaluation Guidelines:
+    - This was a live spoken interview. Candidates give concise, practical verbal answers (typically 2-4 sentences).
+    - Do NOT penalize candidates simply for being concise. A focused, direct answer that addresses the core question is good communication, not a weakness.
+    - Do NOT give generic complaints such as 'should have been in more detail', 'needs more depth', or 'should have provided more thorough explanations'.
+    - Instead, evaluate whether the core concepts, technical logic, and trade-offs are sound and accurate.
+    - In Strengths and Weaknesses, be concrete and specific about what technical ideas or approaches were good or missing, rather than commenting on word count or length.
 
     Provide:
 
     1. Overall Score (/10)
     2. Technical Knowledge Score (/10)
     3. Communication Score (/10)
-    4. Strengths
-    5. Weaknesses
-    6. Areas for Improvement
+    4. Strengths (concrete points the candidate explained well)
+    5. Weaknesses (specific technical gaps, misconceptions, or omitted trade-offs, if any)
+    6. Areas for Improvement (actionable advice)
     7. Recommended Topics to Study
 
-    Focus on:
-    - Quality of answers
-    - Depth of understanding
-    - Communication clarity
-    - Problem solving ability
-    - Confidence
-
-    Keep the report professional and concise.
+    Keep the report professional, realistic, and constructive.
     """
     try:
         response = llm.invoke(prompt)
